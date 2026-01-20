@@ -5,8 +5,14 @@ from app.core.roles import require_owner
 from app.models.user import User
 from app.schemas.user import UserCreate, UserOut
 from app.core.security import hash_password
+from app.core.dependencies import get_current_user
+
 
 router = APIRouter()
+
+@router.get("/me", response_model=UserOut)
+def read_me(current_user = Depends(get_current_user)):
+    return current_user
 
 @router.post("/staff", response_model=UserOut)
 def create_staff(
