@@ -29,11 +29,19 @@ def _now():
 
 
 def main():
+    if os.getenv("RUN_SEED") != "1":
+        print("RUN_SEED is not '1' — skipping seeding.")
+        return
+
     database_url = _db_url()
     print(f"Seeding database: {database_url.split('@')[-1]}")
 
+    
+
     engine = create_engine(database_url, pool_pre_ping=True)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    
 
     with SessionLocal() as db:
         # ----------------------------
