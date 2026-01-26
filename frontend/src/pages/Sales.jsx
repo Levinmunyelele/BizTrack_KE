@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
-import http from "../api/http";
+import api from "../api/client";   
+
 
 export default function Sales() {
   const [sales, setSales] = useState([]);
@@ -13,8 +14,8 @@ export default function Sales() {
 
   async function load() {
     const [salesRes, customersRes] = await Promise.all([
-      http.get("/sales"),
-      http.get("/customers"),
+      api.get("/sales"),
+      api.get("/customers"),
     ]);
     setSales(salesRes.data);
     setCustomers(customersRes.data);

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import http from "../api/http";
+import api from "../api/client";
 
 export default function Login() {
   const [email, setEmail] = useState("levin@test.com");
@@ -15,8 +15,10 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const res = await http.post("/auth/login", { email, password });
+      const res = await api.post("/auth/login", { email, password });
+
       localStorage.setItem("token", res.data.access_token);
+
       navigate("/", { replace: true });
     } catch (err) {
       setError(err?.response?.data?.detail || "Login failed");
@@ -41,7 +43,7 @@ export default function Login() {
           <div>
             <label className="text-sm text-gray-700">Email</label>
             <input
-              className="mt-1 w-full border rounded-lg p-3 focus:outline-none focus:ring"
+              className="mt-1 w-full border rounded-lg p-3"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               type="email"
@@ -52,7 +54,7 @@ export default function Login() {
           <div>
             <label className="text-sm text-gray-700">Password</label>
             <input
-              className="mt-1 w-full border rounded-lg p-3 focus:outline-none focus:ring"
+              className="mt-1 w-full border rounded-lg p-3"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               type="password"

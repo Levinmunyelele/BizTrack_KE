@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import http from "../api/http";
+import api from "../api/client";
 import Layout from "../components/Layout";
 
 function Card({ title, value }) {
@@ -22,8 +22,8 @@ export default function Dashboard() {
     setError("");
     try {
       const [meRes, sumRes] = await Promise.all([
-        http.get("/users/me"),
-        http.get("/sales/summary"),
+        api.get("/users/me"),
+        api.get("/sales/summary"),
       ]);
       setMe(meRes.data);
       setSummary(sumRes.data);

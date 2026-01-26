@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Layout from "../components/Layout";
-import http from "../api/http";
+import api from "../api/client";   
 
 export default function Customers() {
   const [customers, setCustomers] = useState([]);
@@ -10,7 +10,7 @@ export default function Customers() {
   const [error, setError] = useState("");
 
   async function load() {
-    const res = await http.get("/customers");
+    const res = await api.get("/customers");
     setCustomers(res.data);
   }
 
