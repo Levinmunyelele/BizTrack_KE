@@ -9,14 +9,18 @@ app = FastAPI(title="BizTrack KE")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "https://biztrack-ke-1.onrender.com",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "https://biztrack-ke-1.onrender.com",
     ],
+    allow_origin_regex=r"^https://biztrack-ke-1\.onrender\.com$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=86400,
 )
+
 
 app.include_router(auth.router)
 app.include_router(users.router, prefix="/users", tags=["Users"])
