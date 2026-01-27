@@ -42,37 +42,37 @@ def main():
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
     with SessionLocal() as db:
-    owner_email = os.getenv("SEED_OWNER_EMAIL", "levin@test.com").strip().lower()
-    owner_password = os.getenv("SEED_OWNER_PASSWORD", "password123").strip()
-    owner_name = os.getenv("SEED_OWNER_NAME", "Levin").strip()
+        owner_email = os.getenv("SEED_OWNER_EMAIL", "levin@test.com").strip().lower()
+        owner_password = os.getenv("SEED_OWNER_PASSWORD", "password123").strip()
+        owner_name = os.getenv("SEED_OWNER_NAME", "Levin").strip()
 
-    business_name = os.getenv("SEED_BUSINESS_NAME", "BizTrack KE").strip()
+        business_name = os.getenv("SEED_BUSINESS_NAME", "BizTrack KE").strip()
 
-    # 1) Find owner first
-    owner = db.query(User).filter(User.email == owner_email).first()
+        # 1) Find owner first
+        owner = db.query(User).filter(User.email == owner_email).first()
 
     # 2) If owner exists, use THEIR business_id (this is your case)
-    if owner:
-        business = db.query(Business).filter(Business.id == owner.business_id).first()
-        if not business:
-            raise RuntimeError(f"Owner exists but business_id={owner.business_id} not found in businesses table")
+        if owner:
+            business = db.query(Business).filter(Business.id == owner.business_id).first()
+            if not business:
+                raise RuntimeError(f"Owner exists but business_id={owner.business_id} not found in businesses table")
 
-        print(f"↩️ Owner exists: {owner.email} (id={owner.id})")
-        print(f"✅ Using owner's business: {business.name} (id={business.id})")
+            print(f"↩️ Owner exists: {owner.email} (id={owner.id})")
+            print(f"✅ Using owner's business: {business.name} (id={business.id})")
 
     # 3) If owner does NOT exist, create business then create owner attached to it
-    else:
-        business = db.query(Business).filter(Business.name == business_name).first()
-        if not business:
-            business = Business(name=business_name)
-            if hasattr(Business, "created_at"):
-                business.created_at = _now()
-            db.add(business)
-            db.commit()
-            db.refresh(business)
-            print(f"✅ Created business: {business.name} (id={business.id})")
         else:
-            print(f"↩️ Business exists: {business.name} (id={business.id})")
+            business = db.query(Business).filter(Business.name == business_name).first()
+            if not business:
+                business = Business(name=business_name)
+                if hasattr(Business, "created_at"):
+                    business.created_at = _now()
+                db.add(business)
+                db.commit()
+                db.refresh(business)
+                print(f"✅ Created business: {business.name} (id={business.id})")
+            else:
+                print(f"↩️ Business exists: {business.name} (id={business.id})")
 
         owner = User(
             name=owner_name,
