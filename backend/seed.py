@@ -41,28 +41,32 @@ def main():
     engine = create_engine(database_url, pool_pre_ping=True)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
-    
-
     with SessionLocal() as db:
-        # ----------------------------
-        # 1) Business
-        # ----------------------------
-        business_name = os.getenv("SEED_BUSINESS_NAME", "BizTrack KE").strip()
-        business = db.query(Business).filter(Business.name == business_name).first()
+    owner_email = os.getenv("SEED_OWNER_EMAIL", "levin@test.com").strip().lower()
+    owner_password = os.getenv("SEED_OWNER_PASSWORD", "password123").strip()
+    owner_name = os.getenv("SEED_OWNER_NAME", "Levin").strip()
 
+    business_name = os.getenv("SEED_BUSINESS_NAME", "BizTrack KE").strip()
+
+    # 1) Find owner first
+    owner = db.query(User).filter(User.email == owner_email).first()
+
+    # 2) If owner exists, use THEIR business_id (this is your case)
+    if owner:
+        business = db.query(Business).filter(Business.id == owner.business_id).first()
         if not business:
-            business = Business(
-                name=business_name,
-                created_at=_now() if hasattr(Business, "created_at") else None,
-            )
-            # Remove None fields if model doesn't have them
-            for k in list(vars(business).keys()):
-                if getattr(business, k) is None:
-                    try:
-                        delattr(business, k)
-                    except Exception:
-                        pass
+            raise RuntimeError(f"Owner exists but business_id={owner.business_id} not found in businesses table")
 
+        print(f"↩️ Owner exists: {owner.email} (id={owner.id})")
+        print(f"✅ Using owner's business: {business.name} (id={business.id})")
+
+    # 3) If owner does NOT exist, create business then create owner attached to it
+    else:
+        business = db.query(Business).filter(Business.name == business_name).first()
+        if not business:
+            business = Business(name=business_name)
+            if hasattr(Business, "created_at"):
+                business.created_at = _now()
             db.add(business)
             db.commit()
             db.refresh(business)
@@ -70,37 +74,20 @@ def main():
         else:
             print(f"↩️ Business exists: {business.name} (id={business.id})")
 
-        # ----------------------------
-        # 2) Owner user
-        # ----------------------------
-        owner_email = os.getenv("SEED_OWNER_EMAIL", "levin@test.com").strip().lower()
-        owner_password = os.getenv("SEED_OWNER_PASSWORD", "password123").strip()
-        owner_name = os.getenv("SEED_OWNER_NAME", "Levin").strip()
+        owner = User(
+            name=owner_name,
+            email=owner_email,
+            password_hash=hash_password(owner_password),
+            role="owner",
+            business_id=business.id,
+        )
+        if hasattr(User, "created_at"):
+            owner.created_at = _now()
 
-        owner = db.query(User).filter(User.email == owner_email).first()
-        if not owner:
-            owner = User(
-                name=owner_name,
-                email=owner_email,
-                password_hash=hash_password(owner_password),
-                role="owner",
-                business_id=business.id,
-                created_at=_now() if hasattr(User, "created_at") else None,
-            )
-            # Remove None fields if model doesn't have them
-            for k in list(vars(owner).keys()):
-                if getattr(owner, k) is None:
-                    try:
-                        delattr(owner, k)
-                    except Exception:
-                        pass
-
-            db.add(owner)
-            db.commit()
-            db.refresh(owner)
-            print(f"✅ Created owner: {owner.email} (id={owner.id})")
-        else:
-            print(f"↩️ Owner exists: {owner.email} (id={owner.id})")
+        db.add(owner)
+        db.commit()
+        db.refresh(owner)
+        print(f"✅ Created owner: {owner.email} (id={owner.id})")
 
         # ----------------------------
         # 3) Customers
