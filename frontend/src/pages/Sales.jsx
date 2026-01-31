@@ -30,7 +30,7 @@ export default function Sales() {
     setError("");
     setLoading(true);
     try {
-      await http.post("/sales", {
+      await api.post("/sales", {
         amount: Number(amount),
         payment_method,
         customer_id: customer_id ? Number(customer_id) : null,

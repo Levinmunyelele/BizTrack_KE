@@ -23,7 +23,7 @@ export default function Customers() {
     setError("");
     setLoading(true);
     try {
-      await http.post("/customers", { name, phone });
+      await api.post("/customers", { name, phone });
       setName("");
       setPhone("");
       await load();
