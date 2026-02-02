@@ -1,7 +1,4 @@
-// Dashboard.jsx (Record Sale Modal + quick action)
-// Drop this into your Dashboard file and wire the <RecordSaleModal ... /> at the bottom.
-// Assumes you already have `api` (axios instance) and Tailwind set up.
-
+// Dashboard.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/client";
@@ -331,40 +328,49 @@ export default function Dashboard() {
   const [summary, setSummary] = useState(null);
   const [customers, setCustomers] = useState([]);
   const [error, setError] = useState("");
-  const [range, setRange] = useState("7d"); // UI only for now
+  const [range, setRange] = useState("7d"); // Default range
   const [saleModalOpen, setSaleModalOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const navigate = useNavigate();
 
+  // Load data - Now includes the RANGE parameter
   async function load() {
     setError("");
     try {
       const [meRes, sumRes, customersRes] = await Promise.all([
         api.get("/users/me"),
-        api.get("/sales/summary"), // later: api.get(`/sales/summary?range=${range}`)
+        // FIX: Pass the range to the backend!
+        api.get(`/sales/summary?range=${range}`), 
         api.get("/customers"),
       ]);
       setMe(meRes.data);
       setSummary(sumRes.data);
       setCustomers(customersRes.data);
     } catch (err) {
-      setError("Session expired. Please login again.");
-      localStorage.removeItem("token");
-      navigate("/login", { replace: true });
+      console.error(err);
+      // Only redirect if it's a 401 (Unauthorized)
+      if (err.response?.status === 401) {
+          setError("Session expired. Please login again.");
+          localStorage.removeItem("token");
+          navigate("/login", { replace: true });
+      } else {
+          setError("Failed to load dashboard data.");
+      }
     }
   }
 
+  // Reload whenever 'range' changes
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [range]); // <--- Added range to dependency array
 
   function logout() {
     localStorage.removeItem("token");
     navigate("/login", { replace: true });
   }
 
-  // When a customer is created in modal, update local list immediately
   function handleCustomerCreated(newCustomer) {
     if (!newCustomer?.id) return;
     setCustomers((prev) => {
@@ -374,9 +380,31 @@ export default function Dashboard() {
     });
   }
 
-  // After sale created, refresh analytics
   async function handleSaleCreated() {
     await load();
+  }
+
+  // Handle Export CSV
+  async function handleExport() {
+      setExporting(true);
+      try {
+          const response = await api.get(`/sales/export?range=${range}`, {
+              responseType: 'blob', // Important for files
+          });
+          
+          // Create a download link programmatically
+          const url = window.URL.createObjectURL(new Blob([response.data]));
+          const link = document.createElement('a');
+          link.href = url;
+          link.setAttribute('download', `sales_${range}.csv`);
+          document.body.appendChild(link);
+          link.click();
+          link.parentNode.removeChild(link);
+      } catch (err) {
+          alert("Failed to download CSV");
+      } finally {
+          setExporting(false);
+      }
   }
 
   return (
@@ -425,10 +453,11 @@ export default function Dashboard() {
                 + Record Sale
               </button>
               <button
-                onClick={() => alert("Wire export here")}
-                className="rounded-lg border bg-white px-4 py-2"
+                onClick={handleExport}
+                disabled={exporting}
+                className="rounded-lg border bg-white px-4 py-2 disabled:opacity-50"
               >
-                Export CSV
+                {exporting ? "Downloading..." : "Export CSV"}
               </button>
             </div>
           </div>
@@ -475,8 +504,9 @@ export default function Dashboard() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
                 <div className="bg-white rounded-2xl shadow p-4">
-                  <h2 className="font-semibold">Payments</h2>
+                  <h2 className="font-semibold">Payments ({range === "today" ? "Today" : range === "7d" ? "Last 7 Days" : "Last 30 Days"})</h2>
                   <div className="mt-3 space-y-2">
+                    {(summary.payments || []).length === 0 && <div className="text-gray-500 text-sm">No payments found.</div>}
                     {(summary.payments || []).map((p) => (
                       <div
                         key={p.method}
