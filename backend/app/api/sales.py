@@ -1,11 +1,10 @@
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
-from fastapi import APIRouter, Depends, Query  
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from fastapi.responses import StreamingResponse
 import csv
 import io
-from datetime import date, datetime, timedelta, timezone
-
 
 from app.db.deps import get_db
 from app.core.dependencies import get_current_user
@@ -14,6 +13,10 @@ from app.schemas.sale import SaleCreate, SaleOut
 from app.models.customer import Customer
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
+
+# Helper to get current time in East Africa Time (UTC+3)
+def get_now_eat():
+    return datetime.now(timezone(timedelta(hours=3)))
 
 @router.post("", response_model=SaleOut)
 def create_sale(
@@ -50,7 +53,7 @@ def sales_summary(
 ):
     # 1. Timezone Setup (East Africa Time - UTC+3)
     # This ensures sales made at 1 AM Nairobi time count as "Today"
-    now_eat = datetime.now(timezone(timedelta(hours=3)))
+    now_eat = get_now_eat()
     today_start_eat = now_eat.replace(hour=0, minute=0, second=0, microsecond=0)
     
     # 2. Determine the SINGLE start date based on the user's selection
@@ -61,7 +64,7 @@ def sales_summary(
     else: # "30d"
         filter_start_eat = today_start_eat - timedelta(days=29)
 
-    # Convert to UTC for the database query
+    # Convert to UTC for the database query (DB stores in UTC)
     filter_start_utc = filter_start_eat.astimezone(timezone.utc)
 
     # 3. Calculate the ONE Total for the selected range
@@ -160,23 +163,30 @@ def sales_summary(
         "best_day": best_day,
     }
 
-def _range_start(range: str):
-    now = datetime.now(timezone.utc)
-    if range == "today":
-        return now.replace(hour=0, minute=0, second=0, microsecond=0)
-    if range == "7d":
-        return now - timedelta(days=7)
-    if range == "30d":
-        return now - timedelta(days=30)
-    return None  # no filter
-
 @router.get("/export")
 def export_sales_csv(
     range: str = Query("7d", pattern="^(today|7d|30d)$"),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    start = _range_start(range)
+    # Use EAT time to determine start of range
+    now_eat = get_now_eat()
+    today_start_eat = now_eat.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    if range == "today":
+        start_eat = today_start_eat
+    elif range == "7d":
+        start_eat = today_start_eat - timedelta(days=6)
+    elif range == "30d":
+        start_eat = today_start_eat - timedelta(days=29)
+    else:
+        start_eat = None
+
+    # Convert to UTC for DB
+    if start_eat:
+        start_utc = start_eat.astimezone(timezone.utc)
+    else:
+        start_utc = None
 
     q = (
         db.query(
@@ -191,15 +201,15 @@ def export_sales_csv(
         .filter(Sale.business_id == current_user.business_id)
         .order_by(Sale.created_at.desc())
     )
-    if start is not None:
-        q = q.filter(Sale.created_at >= start)
+    if start_utc is not None:
+        q = q.filter(Sale.created_at >= start_utc)
 
     rows = q.all()
 
     def generate():
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow(["id", "amount", "payment_method", "customer_id", "customer_name", "created_at"])
+        writer.writerow(["id", "amount", "payment_method", "customer_id", "customer_name", "created_at_utc"])
         for r in rows:
             writer.writerow([r.id, r.amount, r.payment_method, r.customer_id, r.customer_name, r.created_at])
         yield buf.getvalue()
