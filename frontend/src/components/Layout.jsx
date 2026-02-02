@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, Receipt, LogOut, Menu, X, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Users, Receipt, LogOut, Menu, X, ChevronRight, Briefcase } from "lucide-react";
 
 export default function Layout({ children }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -16,6 +16,7 @@ export default function Layout({ children }) {
     { name: "Dashboard", path: "/", icon: LayoutDashboard },
     { name: "Sales History", path: "/sales", icon: Receipt },
     { name: "Customers", path: "/customers", icon: Users },
+    { name: "Manage Team", path: "/staff", icon: Briefcase },
   ];
 
   return (
