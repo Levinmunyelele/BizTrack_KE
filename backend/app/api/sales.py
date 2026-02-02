@@ -1,10 +1,11 @@
 from sqlalchemy import func
-from fastapi import APIRouter, Depends, Query  # <--- Added Query here
+from fastapi import APIRouter, Depends, Query  
 from sqlalchemy.orm import Session
 from fastapi.responses import StreamingResponse
 import csv
 import io
 from datetime import date, datetime, timedelta, timezone
+
 
 from app.db.deps import get_db
 from app.core.dependencies import get_current_user
@@ -47,39 +48,45 @@ def sales_summary(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    # Decide the date window (inclusive)
-    end_day = date.today()
-
+    # 1. Timezone Setup (East Africa Time - UTC+3)
+    # This ensures sales made at 1 AM Nairobi time count as "Today"
+    now_eat = datetime.now(timezone(timedelta(hours=3)))
+    today_start_eat = now_eat.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # 2. Determine the SINGLE start date based on the user's selection
     if range == "today":
-        start_day = end_day
+        filter_start_eat = today_start_eat
     elif range == "7d":
-        start_day = end_day - timedelta(days=6)   # last 7 days including today
-    else:  # "30d"
-        start_day = end_day - timedelta(days=29)  # last 30 days including today
+        filter_start_eat = today_start_eat - timedelta(days=6)
+    else: # "30d"
+        filter_start_eat = today_start_eat - timedelta(days=29)
 
-    base = (
-        db.query(Sale)
+    # Convert to UTC for the database query
+    filter_start_utc = filter_start_eat.astimezone(timezone.utc)
+
+    # 3. Calculate the ONE Total for the selected range
+    # We use this same filter for everything below so the numbers match perfectly
+    total_amount = (
+        db.query(func.coalesce(func.sum(Sale.amount), 0))
         .filter(Sale.business_id == current_user.business_id)
-        .filter(func.date(Sale.created_at) >= start_day)
-        .filter(func.date(Sale.created_at) <= end_day)
+        .filter(Sale.created_at >= filter_start_utc)
+        .scalar()
     )
 
-    # Totals in the selected range
-    total = db.query(func.coalesce(func.sum(Sale.amount), 0)).select_from(base.subquery()).scalar()
-
-    # If you still want these keys in frontend, map them by range:
+    # 4. Exclusive Display Logic
+    # Only fill the box the user asked for; zero out the rest
     today_total = 0.0
     week_total = 0.0
     month_total = 0.0
 
     if range == "today":
-        today_total = float(total)
+        today_total = float(total_amount)
     elif range == "7d":
-        week_total = float(total)
+        week_total = float(total_amount)
     else:
-        month_total = float(total)
+        month_total = float(total_amount)
 
-    # Payment method breakdown (in range)
+    # 5. Payment Breakdown
     payment_breakdown = (
         db.query(
             Sale.payment_method,
@@ -87,18 +94,17 @@ def sales_summary(
             func.coalesce(func.sum(Sale.amount), 0),
         )
         .filter(Sale.business_id == current_user.business_id)
-        .filter(func.date(Sale.created_at) >= start_day)
-        .filter(func.date(Sale.created_at) <= end_day)
+        .filter(Sale.created_at >= filter_start_utc)
         .group_by(Sale.payment_method)
         .all()
     )
 
     payments = [
-        {"method": pm, "count": int(cnt), "total": float(total)}
-        for pm, cnt, total in payment_breakdown
+        {"method": pm, "count": int(cnt), "total": float(t)}
+        for pm, cnt, t in payment_breakdown
     ]
 
-    # Top customers (in range)
+    # 6. Top Customers
     top_customers_raw = (
         db.query(
             Customer.id,
@@ -108,8 +114,7 @@ def sales_summary(
         )
         .join(Customer, Sale.customer_id == Customer.id)
         .filter(Sale.business_id == current_user.business_id)
-        .filter(func.date(Sale.created_at) >= start_day)
-        .filter(func.date(Sale.created_at) <= end_day)
+        .filter(Sale.created_at >= filter_start_utc)
         .group_by(Customer.id, Customer.name)
         .order_by(func.coalesce(func.sum(Sale.amount), 0).desc())
         .limit(5)
@@ -126,15 +131,14 @@ def sales_summary(
         for cid, name, total_spent, orders in top_customers_raw
     ]
 
-    # Best day (in range)
+    # 7. Best Day
     best_day_raw = (
         db.query(
             func.date(Sale.created_at).label("day"),
             func.coalesce(func.sum(Sale.amount), 0).label("total"),
         )
         .filter(Sale.business_id == current_user.business_id)
-        .filter(func.date(Sale.created_at) >= start_day)
-        .filter(func.date(Sale.created_at) <= end_day)
+        .filter(Sale.created_at >= filter_start_utc)
         .group_by(func.date(Sale.created_at))
         .order_by(func.coalesce(func.sum(Sale.amount), 0).desc())
         .first()
@@ -146,8 +150,8 @@ def sales_summary(
 
     return {
         "range": range,
-        "start_day": str(start_day),
-        "end_day": str(end_day),
+        "start_day": str(filter_start_eat.date()),
+        "end_day": str(now_eat.date()),
         "today_total": today_total,
         "week_total": week_total,
         "month_total": month_total,
