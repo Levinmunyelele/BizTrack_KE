@@ -1,16 +1,16 @@
 from sqlalchemy import func
-from datetime import date
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query  # <--- Added Query here
 from sqlalchemy.orm import Session
+from fastapi.responses import StreamingResponse
+import csv
+import io
+from datetime import date, datetime, timedelta, timezone
+
 from app.db.deps import get_db
 from app.core.dependencies import get_current_user
 from app.models.sale import Sale
 from app.schemas.sale import SaleCreate, SaleOut
 from app.models.customer import Customer
-from datetime import date, timedelta
-from fastapi.responses import StreamingResponse
-import csv, io
-from datetime import datetime, timedelta, timezone
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
 
@@ -165,6 +165,7 @@ def _range_start(range: str):
     if range == "30d":
         return now - timedelta(days=30)
     return None  # no filter
+
 @router.get("/export")
 def export_sales_csv(
     range: str = Query("7d", pattern="^(today|7d|30d)$"),
